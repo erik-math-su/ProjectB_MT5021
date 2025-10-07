@@ -31,6 +31,7 @@ df$bedomare <- factor(df$bedomare)
 df$lagringstid <- factor(df$lagringstid)
 df$mognadstid <- factor(df$mognadstid)
 df$syre <- factor(df$syre)
+df$syre <- relevel(df$syre, ref = "21")
 
 # Beräknar medel (ny data för analys 1)
 medel <- aggregate(y ~ lagringstid + mognadstid + syre, data = df, FUN = mean)
@@ -52,7 +53,7 @@ Problem, saknas y värden i vissa data points. \
 Ej balanserad då? \
 Inga frihetsgrader kvar för residualer => inga F-test möjligt.
 
-**Reduktion av modell** \
+**Analys 1** \
 
 ```{r}
 # Inget trevägssamspel
@@ -64,37 +65,25 @@ anova(fit_no3)
 anova(fit_no3, modell1) 
 ```
 
-Nu har vi frihetsgrader över och noterar att syre är signifikant för smakpreferens. Samspelet av lagringstid och syre närmast att vara signifikant. Lagringstid och mognadstid helt insignifikant. Fortsatt reduktion\
+Nu har vi frihetsgrader över och noterar att syre är signifikant för smakpreferens. Samspelet av lagringstid och syre närmast att vara signifikant. Lagringstid och mognadstid helt insignifikant.
 
 ```{r}
-fit_noBC <- aov(y ~ lagringstid + mognadstid + syre + lagringstid:syre, data = medel)
-anova(fit_noBC)
-anova(fit_no3, fit_noBC)
-```
-
-F-testet testar H_0: borttagna interaktioner = 0 \
-p -värdet > 0.05 så förkastar inte H_0. Senare modell bättre.
-
-```{r}
-fit_additiv <- aov(y ~lagringstid + mognadstid + syre, data = medel)
-anova(fit_noBC, fit_additiv)
-```
-
-Återigen samma, borttagandet försämrar ej modell.\
-Förmodligen dålig idé att reducera mer. \
-Enligt Jan behöver man inte reducera mer än att ta bort 3-vägssamspelet. 
-
-```{r}
-# Effektplot for enda signifikanta faktorn
+# Effektplot, bör framförallt jämföra samspel
 library(effects)
-plot(effect("syre", fit_additiv), multiline = TRUE)
+plot(effect("syre", fit_no3), multiline = TRUE)
 ```
 ```{r}
 # Skattningar för analys 1 (inget trevägssamspel)
 modell_lm <- lm(fit_no3)
 summary(modell_lm)
+#Punkt + linjär trend över mognadstid per syre
+library(ggplot2)
+ggplot(df, aes(x = mognadstid, y = y, group = syre, color = syre)) +
+  geom_point(position = position_jitter(width = 0.2), alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_wrap(~ lagringstid) +
+  labs(title = "y vs mognadstid per syrehalt och lagringstid", x = "Mognad (dag)", y = "y")
 ```
-
 
 
 Ser bra nog ut, kan motiver mer med shapiro test mm. för att visa att modell antaganden uppfylda. \
@@ -103,17 +92,81 @@ Ser bra nog ut, kan motiver mer med shapiro test mm. för att visa att modell an
 
 
 ```{r}
+library(lme4)
+library(lmerTest)
 #full modell typ 1
 fit_full <- aov(y ~ bedomare + lagringstid * mognadstid * syre, data = df)
-anova(fit_full)
-summary(lm( y ~bedomare + lagringstid * mognadstid * syre, data = df))
-library(lme4)
 
-# Full blandadmodell (Förmodligen inte relevant för detta projekt)
-# Här betraktas istället bedomare som slumpmässig och inte systematisk
-# som ovan
-# fit_m_full <- lmer(y ~ lagringstid * mognadstid * syre + (1 | bedomare), data = df, REML = FALSE)
+par(mfrow = c(2,2))
+plot(fit_full)  # Residuals vs fitted, Q-Q, Scale-Location, Cook's/Leverage
+par(mfrow = c(1,1))
 
-anova(fit_m_full)
+library(ggplot2)
+df$resid <- residuals(fit_full)
+df$fitted <- fitted(fit_full)
+ggplot(df, aes(x = fitted, y = resid, color = factor(bedomare))) +
+  geom_jitter(width = 0.02, height = 0, alpha = 0.6) +
+  geom_smooth(method = "loess", se = FALSE, color = "black") +
+  theme_minimal()
+
+boxplot(resid ~ bedomare, data = df, main = "Residualer per bedömare")
+boxplot(resid ~ syre, data = df, main = "Residualer per syrehalt")
+
+ggplot(df, aes(x = mognadstid, y = resid)) +
+  geom_jitter(width = 0.2, height = 0, alpha = 0.5) +
+  facet_wrap(~ bedomare) + geom_hline(yintercept = 0, linetype = 2)
+
+cooks <- cooks.distance(fit_full)
+lev <- hatvalues(fit_full)
+thr <- 4/(nrow(df)-length(coef(fit_full)))
+which(cooks > thr)       # indices med Cook's > cutoff
+data.frame(row = which(cooks>thr), cooks = cooks[which(cooks>thr)], leverage = lev[which(cooks>thr)])
+
+
 ```
 
+Alla modellantaganden verkar uppfylde, samt ser vi inga tydliga mönster för någon av bedömarna.
+
+```{r}
+#full modell typ 2
+lmer_mod <- lmer(y ~ lagringstid * mognadstid * syre + (1 | bedomare), data = df)
+
+# --- Residualdiagnostik ---
+par(mfrow=c(2,2))
+plot(fitted(lmer_mod), resid(lmer_mod), main="Residuals vs Fitted")
+qqnorm(resid(lmer_mod)); qqline(resid(lmer_mod))
+plot(fitted(lmer_mod), sqrt(abs(resid(lmer_mod))), main="Scale-Location")
+boxplot(resid(lmer_mod) ~ df$bedomare, main="Residuals per Bedömare")
+
+# --- Random effects ---
+qqnorm(ranef(lmer_mod)$bedomare[[1]]); qqline(ranef(lmer_mod)$bedomare[[1]])
+
+
+```
+
+```{r}
+mod_sys <- lm(y ~ lagringstid * mognadstid * syre + bedomare, data = df)
+mod_rand <- lmer(y ~ lagringstid * mognadstid * syre + (1 | bedomare), data = df)
+# Testet använder Relative Likelihood test
+anova(mod_rand, mod_sys)
+
+```
+
+Det sista testet för jämförelse av modellerna gör ett likelihood ratio test: $\chi^2 = 2(l(\theta) - l(\hat \theta))$ eller mer specifkt $\chi^2 = -2(l_{enklare} - l_{slump)}$ (log-likelihood).
+Residualanalysen visar att bedömarna inte har tydliga mönster när vi analyserar den systematiska versionen, men samtidigt är det mycket sämre att ersätta dem med helt slumpade resultat.
+
+Det betyder alltså att:
+
+Modellen med bedömare som fasta effekter förklarar verkliga systematiska skillnader mellan bedömare.
+
+De slumpmässiga effekterna är för grova, de kan inte fånga upp den struktur som finns i datan. \
+
+**Skattningar analys 2 **\
+
+```{r}
+fit_full_lm <- lm(y ~ bedomare + lagringstid * mognadstid * syre, data = df )
+summary(fit_full_lm)
+```
+Både mognadstid och syrehalt påverkar smaken kraftigt.
+
+Effekterna av syre beror på både mognadstid och lagringstid, så komplex samverkan mellan dessa faktorer.
