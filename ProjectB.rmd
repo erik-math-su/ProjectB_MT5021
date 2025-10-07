@@ -4,7 +4,7 @@ author: "Erik"
 date: "`r Sys.Date()`"
 output: html_document
 ---
-Vi har balanserad data, aov ok. \
+Balanserad data?
 
 ```{r}
 
@@ -30,12 +30,10 @@ modell1 <- aov(y ~lagringstid * mognadstid * syre, data = medel)
 anova(modell1)
 ```
 
+Problem, saknas y värden i vissa data points. \
+Ej balanserad då?
 
-Då vi har en-cells block finns det ingen jämförelse inom stickproven. Därmed finns inga frihetsgrader kvar. \
-Möjliga lösning, reducera modell? \
-Gör analys 2, det löser också problemet. \
-
-**Reduktion av modell (Heirarkisk approach)** \
+**Reduktion av modell** \
 
 ```{r}
 # Inget trevägssamspel
@@ -43,8 +41,8 @@ fit_no3 <- aov(y ~ (lagringstid * mognadstid) +
                       (lagringstid * syre) +
                       (mognadstid * syre),
                data = medel)
-anova(fit_no3)            # nu får du residual-df > 0
-anova(fit_no3, modell1)  # (kan visa varning pga fit_full är perfekt
+anova(fit_no3)          
+anova(fit_no3, modell1) 
 ```
 
 Nu har vi frihetsgrader över och noterar att syre är signifikant för smakpreferens. Samspelet av lagringstid och syre närmast att vara signifikant. Lagringstid och mognadstid helt insignifikant. Fortsatt reduktion\
