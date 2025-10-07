@@ -1,0 +1,89 @@
+---
+title: "ProjectB"
+author: "Erik"
+date: "`r Sys.Date()`"
+output: html_document
+---
+Vi har balanserad data, aov ok. \
+
+```{r}
+
+df <- read.csv("B5_apple.csv")
+# Visa alla rader i en interaktiv tabell
+library(DT)
+DT::datatable(df,
+  options = list(
+    pageLength = 50,
+    lengthMenu = list(c(10, 25, 50, nrow(df)), c("10", "25", "50", "All")),
+    scrollX = TRUE
+  )
+)
+
+df$bedomare <- factor(df$bedomare)
+df$lagringstid <- factor(df$lagringstid)
+df$mognadstid <- factor(df$mognadstid)
+df$syre <- factor(df$syre)
+medel <- aggregate(y ~lagringstid+mognadstid+syre, data = df, FUN = mean)
+
+
+modell1 <- aov(y ~lagringstid * mognadstid * syre, data = medel)
+anova(modell1)
+```
+
+
+Då vi har en-cells block finns det ingen jämförelse inom stickproven. Därmed finns inga frihetsgrader kvar. \
+Möjliga lösning, reducera modell? \
+Gör analys 2, det löser också problemet. \
+
+**Reduktion av modell (Heirarkisk approach)** \
+
+```{r}
+# Inget trevägssamspel
+fit_no3 <- aov(y ~ (lagringstid * mognadstid) +
+                      (lagringstid * syre) +
+                      (mognadstid * syre),
+               data = medel)
+anova(fit_no3)            # nu får du residual-df > 0
+anova(fit_no3, modell1)  # (kan visa varning pga fit_full är perfekt
+```
+
+Nu har vi frihetsgrader över och noterar att syre är signifikant för smakpreferens. Samspelet av lagringstid och syre närmast att vara signifikant. Lagringstid och mognadstid helt insignifikant. Fortsatt reduktion\
+
+```{r}
+fit_noBC <- aov(y ~ lagringstid + mognadstid + syre + lagringstid:syre, data = medel)
+anova(fit_noBC)
+anova(fit_no3, fit_noBC)
+```
+
+F-testet testar H_0: borttagna interaktioner = 0 \
+p -värdet > 0.05 så förkastar inte H_0. Senare modell bättre.
+
+```{r}
+fit_additiv <- aov(y ~lagringstid + mognadstid + syre, data = medel)
+anova(fit_noBC, fit_additiv)
+```
+
+Återigen samma, borttagandet försämrar ej modell.\
+Förmodligen dålig idé att reducera mer. \
+
+```{r}
+plot(fit_additiv)
+```
+
+Ser bra nog ut, kan motiver mer med shapiro test mm. för att visa att modell antaganden uppfylda. \
+
+**Analys 2**\
+
+
+```{r}
+#full modell typ 1
+fit_full <- aov(y ~ bedomare + lagringstid * mognadstid * syre, data = df)
+anova(fit_full)
+library(lme4)
+
+# Full blandad modell
+fit_m_full <- lmer(y ~ lagringstid * mognadstid * syre + (1 | bedomare), data = df, REML = FALSE)
+
+anova(fit_m_full)
+```
+
