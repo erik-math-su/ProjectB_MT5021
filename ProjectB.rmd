@@ -7,9 +7,34 @@ output: html_document
 Balanserad data?
 
 ```{r}
-
 df <- read.csv("B5_apple.csv")
-# Visa alla rader i en interaktiv tabell
+# Data utskrift med alla tomma y
+library(DT)
+DT::datatable(df,
+  options = list(
+    pageLength = 50,
+    lengthMenu = list(c(10, 25, 50, nrow(df)), c("10", "25", "50", "All")),
+    scrollX = TRUE
+  )
+)
+# Gör om blank till NA
+df$y[df$y == ""] <- NA
+
+# Säkerhetsåtgärd
+df$y <- as.numeric(df$y)
+
+# Tar bort rader med NA
+df <- df[!is.na(df$y), ]
+
+# Konvertera till faktorer (Viktigt för ANOVA)
+df$bedomare <- factor(df$bedomare)
+df$lagringstid <- factor(df$lagringstid)
+df$mognadstid <- factor(df$mognadstid)
+df$syre <- factor(df$syre)
+
+# Beräknar medel (ny data för analys 1)
+medel <- aggregate(y ~ lagringstid + mognadstid + syre, data = df, FUN = mean)
+# Visar datan men borttagna y
 library(DT)
 DT::datatable(df,
   options = list(
@@ -19,19 +44,13 @@ DT::datatable(df,
   )
 )
 
-df$bedomare <- factor(df$bedomare)
-df$lagringstid <- factor(df$lagringstid)
-df$mognadstid <- factor(df$mognadstid)
-df$syre <- factor(df$syre)
-medel <- aggregate(y ~lagringstid+mognadstid+syre, data = df, FUN = mean)
-
-
 modell1 <- aov(y ~lagringstid * mognadstid * syre, data = medel)
 anova(modell1)
 ```
 
 Problem, saknas y värden i vissa data points. \
-Ej balanserad då?
+Ej balanserad då? \
+Inga frihetsgrader kvar för residualer => inga F-test möjligt.
 
 **Reduktion av modell** \
 
@@ -63,10 +82,20 @@ anova(fit_noBC, fit_additiv)
 
 Återigen samma, borttagandet försämrar ej modell.\
 Förmodligen dålig idé att reducera mer. \
+Enligt Jan behöver man inte reducera mer än att ta bort 3-vägssamspelet. 
 
 ```{r}
-plot(fit_additiv)
+# Effektplot for enda signifikanta faktorn
+library(effects)
+plot(effect("syre", fit_additiv), multiline = TRUE)
 ```
+```{r}
+# Skattningar för analys 1 (inget trevägssamspel)
+modell_lm <- lm(fit_no3)
+summary(modell_lm)
+```
+
+
 
 Ser bra nog ut, kan motiver mer med shapiro test mm. för att visa att modell antaganden uppfylda. \
 
@@ -77,10 +106,13 @@ Ser bra nog ut, kan motiver mer med shapiro test mm. för att visa att modell an
 #full modell typ 1
 fit_full <- aov(y ~ bedomare + lagringstid * mognadstid * syre, data = df)
 anova(fit_full)
+summary(lm( y ~bedomare + lagringstid * mognadstid * syre, data = df))
 library(lme4)
 
-# Full blandad modell
-fit_m_full <- lmer(y ~ lagringstid * mognadstid * syre + (1 | bedomare), data = df, REML = FALSE)
+# Full blandadmodell (Förmodligen inte relevant för detta projekt)
+# Här betraktas istället bedomare som slumpmässig och inte systematisk
+# som ovan
+# fit_m_full <- lmer(y ~ lagringstid * mognadstid * syre + (1 | bedomare), data = df, REML = FALSE)
 
 anova(fit_m_full)
 ```
