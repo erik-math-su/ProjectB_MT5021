@@ -112,6 +112,8 @@ ggplot(df, aes(x = fitted, y = resid, color = factor(bedomare))) +
 boxplot(resid ~ bedomare, data = df, main = "Residualer per bedömare")
 boxplot(resid ~ syre, data = df, main = "Residualer per syrehalt")
 
+# Vald för att mognadstid och residualer visar troligen
+# bäst om det finns systematiska avvikelser.
 ggplot(df, aes(x = mognadstid, y = resid)) +
   geom_jitter(width = 0.2, height = 0, alpha = 0.5) +
   facet_wrap(~ bedomare) + geom_hline(yintercept = 0, linetype = 2)
