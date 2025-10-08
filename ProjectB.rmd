@@ -130,7 +130,7 @@ data.frame(row = which(cooks>thr), cooks = cooks[which(cooks>thr)], leverage = l
 Alla modellantaganden verkar uppfylde, samt ser vi inga tydliga mönster för någon av bedömarna.
 
 ```{r}
-#full modell typ 2
+#Blandad modell
 lmer_mod <- lmer(y ~ lagringstid * mognadstid * syre + (1 | bedomare), data = df)
 
 # --- Residualdiagnostik ---
@@ -167,7 +167,8 @@ De slumpmässiga effekterna är för grova, de kan inte fånga upp den struktur 
 
 ```{r}
 fit_full_lm <- lm(y ~ bedomare + lagringstid * mognadstid * syre, data = df )
-summary(fit_full_lm)
+summary(fit_full_lm) 
+anova(fit_full)
 ```
 Både mognadstid och syrehalt påverkar smaken kraftigt.
 
